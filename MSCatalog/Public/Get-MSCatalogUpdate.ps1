@@ -24,6 +24,11 @@ function Get-MSCatalogUpdate {
         return all pages of results. This can result in a significant increase in the number of HTTP requests 
         to the catalog.update.micrsosoft.com endpoint.
 
+        .PARAMETER IncludeDownloadLinks
+        Include the download links for the files as they would be downloaded from catalog.update.micrsosoft.com.
+        This option will cause an extra web request for each update included in the results. It is best to only
+        use this option with a very narrow search term.
+
         .EXAMPLE
         Get-MSCatalogUpdate -Search "Cumulative for Windows Server, version 1903"
 
@@ -62,6 +67,12 @@ function Get-MSCatalogUpdate {
             Position = 3
         )]
         [Switch] $AllPages,
+
+        [Parameter(
+            Mandatory = $false,
+            Position = 4
+        )]
+        [Switch] $IncludeDownloadLinks,
 
         [Parameter(DontShow)]
         [String] $Method = "Get",
@@ -124,10 +135,18 @@ function Get-MSCatalogUpdate {
 
         $Output = foreach ($Row in $Rows) {
             $Cells = $Row.SelectNodes("td")
-            if ($IncludeFileNames) {
+            if ($IncludeFileNames -or $IncludeDownloadLinks) {
                 $Links = Get-UpdateLinks -Guid $Cells[7].SelectNodes("input")[0].Id
-                [string[]] $FileNames = foreach ($Link in $Links.Matches) {
-                    $Link.Value.Split('/')[-1]
+
+                if ($IncludeFileNames)
+                {
+                    [string[]] $FileNames = foreach ($Link in $Links.Matches) {
+                        $Link.Value.Split('/')[-1]
+                    }
+                }
+                if ($IncludeDownloadLinks)
+                {
+                    $DownloadLinks = $Links.Matches.Value
                 }
             }
             [PSCustomObject] @{
@@ -141,6 +160,7 @@ function Get-MSCatalogUpdate {
                 SizeInBytes = [Int] $Cells[6].SelectNodes("span")[1].InnerText 
                 Guid = $Cells[7].SelectNodes("input")[0].Id
                 FileNames = $FileNames
+                DownloadLinks = $DownloadLinks
             }
         }
         $Output | Sort-Object -Property LastUpdated -Descending
